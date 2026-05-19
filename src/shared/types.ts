@@ -38,6 +38,9 @@ export interface ProductionComponentCandidate {
   sourceFile?: string;
   inputKind: SourceInputKind;
   confidence: number;
+  matchScore?: number;
+  matchReasons?: string[];
+  matchWarnings?: string[];
   html: string;
   css: string;
   summary: string;
@@ -60,6 +63,9 @@ export interface SelectedFigmaComponent {
   type: string;
   width: number;
   height: number;
+  childCount: number;
+  textSample: string;
+  hasRtlText: boolean;
   hasSelection: boolean;
   styleSummary: string;
 }

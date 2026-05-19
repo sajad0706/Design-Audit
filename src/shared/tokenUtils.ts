@@ -32,7 +32,10 @@ export function normalizeTokenValue(value: TokenValue, category: TokenCategory):
   if (category === "spacing" || category === "radius") return normalizeLength(value);
   if (category === "typography") {
     const numeric = normalizeLength(value);
-    return typeof numeric === "number" ? numeric : String(value).trim().toLowerCase();
+    if (typeof numeric === "number") return numeric;
+    const weight = normalizeFontWeight(value);
+    if (weight != null) return weight;
+    return String(value).trim().toLowerCase();
   }
   return String(value).trim().toLowerCase();
 }
@@ -54,20 +57,26 @@ export function formatTokenValue(value: TokenValue, category: TokenCategory): st
 
 export function normalizeColor(value: TokenValue): string {
   const text = String(value || "").trim().toLowerCase();
+  const named = namedColor(text);
+  if (named) return named;
   if (/^#[0-9a-f]{3}$/i.test(text)) {
     return `#${text[1]}${text[1]}${text[2]}${text[2]}${text[3]}${text[3]}`;
   }
-  if (/^#[0-9a-f]{6}/i.test(text)) return text.slice(0, 7);
+  if (/^#[0-9a-f]{4}$/i.test(text)) {
+    return `#${text[1]}${text[1]}${text[2]}${text[2]}${text[3]}${text[3]}${text[4]}${text[4]}`;
+  }
+  if (/^#[0-9a-f]{8}$/i.test(text)) return text.slice(0, 9);
+  if (/^#[0-9a-f]{6}$/i.test(text)) return text.slice(0, 7);
 
   const rgb = text.match(/rgba?\(([^)]+)\)/);
   if (rgb) {
-    const parts = rgb[1].split(/,\s*/).map((part) => Number.parseFloat(part));
+    const parts = parseColorFunctionParts(rgb[1]);
     if (parts.length >= 3) {
       return rgbToHex({
-        r: parts[0] / 255,
-        g: parts[1] / 255,
-        b: parts[2] / 255
-      });
+        r: normalizeRgbChannel(parts[0]),
+        g: normalizeRgbChannel(parts[1]),
+        b: normalizeRgbChannel(parts[2])
+      }, parseAlpha(parts[3]));
     }
   }
 
@@ -85,11 +94,13 @@ export function normalizeLength(value: TokenValue): TokenValue {
   return round(amount);
 }
 
-export function rgbToHex(color: { r: number; g: number; b: number }): string {
-  const toByte = (channel: number) => Math.max(0, Math.min(255, Math.round(channel * 255)));
-  return `#${toByte(color.r).toString(16).padStart(2, "0")}${toByte(color.g)
+export function rgbToHex(color: { r: number; g: number; b: number }, alpha = 1): string {
+  const toByte = (channel: number) => Number.isFinite(channel) ? Math.max(0, Math.min(255, Math.round(channel * 255))) : 0;
+  const base = `#${toByte(color.r).toString(16).padStart(2, "0")}${toByte(color.g)
     .toString(16)
     .padStart(2, "0")}${toByte(color.b).toString(16).padStart(2, "0")}`;
+  if (alpha >= 0.995) return base;
+  return `${base}${toByte(alpha).toString(16).padStart(2, "0")}`;
 }
 
 export function dedupeTokens(tokens: ProductionToken[]): ProductionToken[] {
@@ -105,13 +116,55 @@ export function dedupeTokens(tokens: ProductionToken[]): ProductionToken[] {
 export function inferCategory(name: string, rawValue: string, cssProperty = ""): TokenCategory | null {
   const combined = `${name} ${cssProperty}`.toLowerCase();
   const value = String(rawValue || "").toLowerCase();
-  if (/color|background|bg|border-color|fill|stroke|surface|foreground|text/.test(combined) || /^#|rgb\(|hsl\(/.test(value)) {
+  if (/^#|rgba?\(|hsla?\(|^(transparent|black|white)$/.test(value)) return "color";
+  if (/color|background|bg|border-color|fill|stroke|surface|foreground/.test(combined)) {
     return "color";
   }
   if (/radius|rounded|corner/.test(combined)) return "radius";
   if (/space|spacing|gap|padding|margin|inset/.test(combined)) return "spacing";
-  if (/font|type|typography|line-height|letter-spacing/.test(combined)) return "typography";
+  if (/font|type|typography|line-height|letter-spacing|weight|leading/.test(combined)) return "typography";
   if (/shadow|elevation|blur|effect/.test(combined)) return "effect";
+  return null;
+}
+
+function parseColorFunctionParts(value: string): string[] {
+  return value
+    .trim()
+    .replace(/\s*\/\s*/g, ",")
+    .split(/[,\s]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function normalizeRgbChannel(part: string): number {
+  if (part.endsWith("%")) return Number.parseFloat(part) / 100;
+  return Number.parseFloat(part) / 255;
+}
+
+function parseAlpha(part: string | undefined): number {
+  if (!part) return 1;
+  if (part.endsWith("%")) return Math.max(0, Math.min(1, Number.parseFloat(part) / 100));
+  return Math.max(0, Math.min(1, Number.parseFloat(part)));
+}
+
+function normalizeFontWeight(value: TokenValue): number | null {
+  const text = String(value || "").trim().toLowerCase();
+  if (text === "thin") return 100;
+  if (text === "extra light" || text === "extralight" || text === "ultra light" || text === "ultralight") return 200;
+  if (text === "light") return 300;
+  if (text === "normal" || text === "regular") return 400;
+  if (text === "medium") return 500;
+  if (text === "semi bold" || text === "semibold" || text === "demi bold" || text === "demibold") return 600;
+  if (text === "bold") return 700;
+  if (text === "extra bold" || text === "extrabold" || text === "ultra bold" || text === "ultrabold") return 800;
+  if (text === "black" || text === "heavy") return 900;
+  return null;
+}
+
+function namedColor(value: string): string | null {
+  if (value === "black") return "#000000";
+  if (value === "white") return "#ffffff";
+  if (value === "transparent") return "#00000000";
   return null;
 }
 

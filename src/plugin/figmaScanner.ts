@@ -220,12 +220,18 @@ function makeLayerToken(
     field,
     category,
     value,
-    displayValue: formatTokenValue(value, category),
+    displayValue: formatLayerTokenValue(value, category, field),
     figmaStyleName: bindings.styleName,
     figmaVariableName: bindings.variableName,
     hasStyleBinding: bindings.hasStyleBinding,
     hasVariableBinding: bindings.hasVariableBinding
   };
+}
+
+function formatLayerTokenValue(value: TokenValue, category: TokenCategory, field: LayerToken["field"]): string {
+  if (field === "font-family") return String(value);
+  if (field === "font-weight") return String(value);
+  return formatTokenValue(value, category);
 }
 
 async function getStyleName(styleId: unknown): Promise<string | undefined> {
@@ -286,7 +292,7 @@ function firstSolidColor(paints: readonly Paint[] | PluginAPI["mixed"]): string 
   if (!Array.isArray(paints)) return null;
   const paint = paints.find((item) => item.type === "SOLID" && item.visible !== false);
   if (!paint || paint.type !== "SOLID") return null;
-  return rgbToHex(paint.color);
+  return rgbToHex(paint.color, paint.opacity ?? 1);
 }
 
 function formatEffects(effects: readonly Effect[]): string {
@@ -298,7 +304,7 @@ function formatEffect(effect: Effect): string {
   const base = effect.type.toLowerCase().replace(/_/g, "-");
 
   if (effect.type === "DROP_SHADOW" || effect.type === "INNER_SHADOW") {
-    return `${base} ${effect.offset.x}px ${effect.offset.y}px ${radius}px ${effect.spread}px ${rgbToHex(effect.color)}`;
+    return `${base} ${effect.offset.x}px ${effect.offset.y}px ${radius}px ${effect.spread}px ${rgbToHex(effect.color, effect.color.a ?? 1)}`;
   }
 
   return `${base} ${radius}px`;

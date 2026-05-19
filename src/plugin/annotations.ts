@@ -30,7 +30,7 @@ export async function annotateIssues(issues: LintIssue[], layers: ScannedLayer[]
   await clearAuditAnnotations();
 
   const representativeIssues = selectRepresentativeIssues(issues);
-  const byNode = groupIssuesByNode(representativeIssues);
+  const byNode = groupIssuesByNode(issues);
 
   for (const [nodeId, nodeIssues] of byNode) {
     const node = await getNode(nodeId);

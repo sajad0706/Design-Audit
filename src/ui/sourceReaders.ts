@@ -10,15 +10,15 @@ export async function readGithubRepository(repoUrl: string): Promise<ProductionR
   const repo = parseGithubUrl(repoUrl);
   if (!repo) throw new Error("Enter a GitHub repository URL.");
 
-  const metaResponse = await fetch(`https://api.github.com/repos/${repo.owner}/${repo.name}`);
-  if (!metaResponse.ok) throw new Error("Could not read this GitHub repository.");
+  const metaResponse = await safeFetch(`https://api.github.com/repos/${repo.owner}/${repo.name}`);
+  if (!metaResponse.ok) throw githubError(metaResponse, "Could not read this GitHub repository.");
   const meta = (await metaResponse.json()) as { default_branch?: string; full_name?: string };
   const branch = repo.branch || meta.default_branch || "main";
   const branchPath = branch.split("/").map(encodeURIComponent).join("/");
   const archiveUrl = `https://codeload.github.com/${repo.owner}/${repo.name}/zip/refs/heads/${branchPath}`;
 
-  const archiveResponse = await fetch(archiveUrl);
-  if (!archiveResponse.ok) throw new Error("Could not download the repository archive.");
+  const archiveResponse = await safeFetch(archiveUrl);
+  if (!archiveResponse.ok) throw githubError(archiveResponse, "Could not download the repository archive.");
 
   const files = readZipSourceFiles(await archiveResponse.arrayBuffer());
   if (!files.length) throw new Error("No readable source files were found in that repository.");
@@ -56,7 +56,8 @@ export async function readProductionFiles(
 function parseGithubUrl(input: string): { owner: string; name: string; branch?: string } | null {
   let url: URL;
   try {
-    url = new URL(input.trim());
+    const trimmed = input.trim();
+    url = new URL(/^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`);
   } catch {
     return null;
   }
@@ -72,7 +73,12 @@ function parseGithubUrl(input: string): { owner: string; name: string; branch?: 
 }
 
 function readZipSourceFiles(buffer: ArrayBuffer): SourceTextFile[] {
-  const unzipped = unzipSync(new Uint8Array(buffer));
+  let unzipped: Record<string, Uint8Array>;
+  try {
+    unzipped = unzipSync(new Uint8Array(buffer));
+  } catch {
+    throw new Error("We could not read that ZIP file. Try uploading a valid repository ZIP.");
+  }
   const files: SourceTextFile[] = [];
 
   for (const [name, bytes] of Object.entries(unzipped)) {
@@ -89,7 +95,11 @@ async function readLooseSourceFiles(files: File[]): Promise<SourceTextFile[]> {
   for (const file of files.slice(0, MAX_FILES)) {
     const name = file.webkitRelativePath || file.name;
     if (!isSourceFile(name) || file.size > MAX_FILE_SIZE) continue;
-    accepted.push({ name, size: file.size, text: await file.text() });
+    try {
+      accepted.push({ name, size: file.size, text: await file.text() });
+    } catch {
+      throw new Error("We could not read one of the uploaded files.");
+    }
   }
   return accepted;
 }
@@ -116,4 +126,19 @@ function productionFileLabel(files: SourceTextFile[], pastedFiles: SourceTextFil
   if (files.length === 1 && !pastedFiles.length) return files[0].name;
   if (pastedFiles.length) return `${files.length} production files + pasted input`;
   return `${files.length} production files`;
+}
+
+async function safeFetch(url: string): Promise<Response> {
+  try {
+    return await fetch(url);
+  } catch {
+    throw new Error("Could not connect to GitHub. Check your connection and try again.");
+  }
+}
+
+function githubError(response: Response, fallback: string): Error {
+  if (response.status === 404) return new Error("We could not access that GitHub repository. Check the URL or make sure it is public.");
+  if (response.status === 403) return new Error("GitHub rate-limited this request. Try again later or upload the repository ZIP.");
+  if (response.status === 401) return new Error("This GitHub repository needs access permission. Upload a ZIP or use a public repository.");
+  return new Error(fallback);
 }

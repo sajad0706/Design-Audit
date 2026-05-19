@@ -1,5 +1,5 @@
 import type { LayerToken, ProductionToken, TokenCategory } from "../shared/types";
-import { formatTokenValue, normalizeName, normalizeTokenValue, valuesMatch } from "../shared/tokenUtils";
+import { normalizeName, normalizeTokenValue, valuesMatch } from "../shared/tokenUtils";
 
 export interface ProductionTokenIndex {
   byCategory: Record<TokenCategory, ProductionToken[]>;
@@ -46,7 +46,7 @@ export function mapFigmaTokenToProduction(layerToken: LayerToken, index: Product
   const valueMatch = productionTokens.find((token) => valuesMatch(layerToken.value, token.value, layerToken.category));
 
   if (nameMatch && valuesMatch(layerToken.value, nameMatch.value, layerToken.category)) {
-    return { status: "ok", expected: nameMatch, actualDisplay: formatTokenValue(layerToken.value, layerToken.category) };
+    return { status: "ok", expected: nameMatch, actualDisplay: layerToken.displayValue };
   }
 
   if (valueMatch && !layerToken.hasStyleBinding && !layerToken.hasVariableBinding) {
@@ -60,7 +60,7 @@ export function mapFigmaTokenToProduction(layerToken: LayerToken, index: Product
   return {
     status: "mismatch",
     expected: findClosestProductionToken(layerToken, productionTokens),
-    actualDisplay: formatTokenValue(layerToken.value, layerToken.category)
+    actualDisplay: layerToken.displayValue
   };
 }
 
@@ -91,9 +91,13 @@ function findByCompatibleName(name: string, index: ProductionTokenIndex, categor
 function findClosestProductionToken(layerToken: LayerToken, tokens: ProductionToken[]): ProductionToken {
   if (typeof normalizeTokenValue(layerToken.value, layerToken.category) === "number") {
     const actual = normalizeTokenValue(layerToken.value, layerToken.category) as number;
-    return tokens
-      .slice()
-      .sort((left, right) => Math.abs((normalizeTokenValue(left.value, layerToken.category) as number) - actual) - Math.abs((normalizeTokenValue(right.value, layerToken.category) as number) - actual))[0];
+    const numericTokens = tokens
+      .map((token) => ({ token, value: normalizeTokenValue(token.value, layerToken.category) }))
+      .filter((item): item is { token: ProductionToken; value: number } => typeof item.value === "number");
+    if (numericTokens.length) {
+      return numericTokens
+        .sort((left, right) => Math.abs(left.value - actual) - Math.abs(right.value - actual))[0].token;
+    }
   }
   return tokens[0];
 }

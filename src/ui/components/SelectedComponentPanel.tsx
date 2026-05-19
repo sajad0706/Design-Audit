@@ -24,9 +24,19 @@ export function SelectedComponentPanel({ component }: SelectedComponentPanelProp
               <dd>{component.width} x {component.height}</dd>
             </div>
             <div>
+              <dt>Layers</dt>
+              <dd>{component.childCount}</dd>
+            </div>
+            <div>
               <dt>Styles</dt>
               <dd>{component.styleSummary}</dd>
             </div>
+            {component.textSample && (
+              <div>
+                <dt>Text</dt>
+                <dd>{component.hasRtlText ? "Persian / RTL text detected" : "Text detected"}</dd>
+              </div>
+            )}
           </dl>
         </div>
       ) : (

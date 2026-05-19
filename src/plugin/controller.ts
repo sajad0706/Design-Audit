@@ -1,6 +1,6 @@
 import type { ControllerToUiMessage, ProductionReference, SelectedFigmaComponent, UiToControllerMessage } from "../shared/types";
 import { annotateIssues, clearAuditAnnotations } from "./annotations";
-import { collectDesignLintReference } from "./designLint";
+import { collectDesignLintReference, type DesignLintReference } from "./designLint";
 import { scanFigmaLayers } from "./figmaScanner";
 import { lintScannedLayers } from "./lintRules";
 import { createProductionTokenIndex } from "./tokenMapper";
@@ -8,6 +8,8 @@ import { createProductionTokenIndex } from "./tokenMapper";
 declare const __html__: string;
 
 figma.showUI(__html__, { width: 520, height: 760, themeColors: true });
+
+let designLintReferenceCache: DesignLintReference | null = null;
 
 figma.ui.onmessage = async (message: UiToControllerMessage) => {
   try {
@@ -31,6 +33,10 @@ postSelectionInfo();
 
 // Coordinates source token indexing, Figma layer scanning, lint rules, and annotations.
 async function runScan(reference: ProductionReference | null, annotate: boolean, includeDesignLint: boolean): Promise<void> {
+  if (figma.currentPage.selection.length !== 1) {
+    throw new Error(figma.currentPage.selection.length ? "Select one Figma component before scanning." : "Select a Figma component before scanning.");
+  }
+
   const includeProduction = Boolean(reference?.tokens.length);
   const sourceLabel = reference?.label || "Design lint only";
   const index = includeProduction && reference ? createProductionTokenIndex(reference.tokens) : null;
@@ -64,8 +70,10 @@ async function runScan(reference: ProductionReference | null, annotate: boolean,
 }
 
 async function readDesignLintReference() {
+  if (designLintReferenceCache) return designLintReferenceCache;
   post({ type: "progress", message: "Reading Figma styles and variables..." });
-  return collectDesignLintReference();
+  designLintReferenceCache = await collectDesignLintReference();
+  return designLintReferenceCache;
 }
 
 async function selectNode(nodeId: string): Promise<void> {
@@ -81,6 +89,21 @@ function postSelectionInfo(): void {
 }
 
 function describeSelection(): SelectedFigmaComponent {
+  if (figma.currentPage.selection.length > 1) {
+    return {
+      nodeId: null,
+      name: "Multiple layers selected",
+      type: "Multiple",
+      width: 0,
+      height: 0,
+      childCount: 0,
+      textSample: "",
+      hasRtlText: false,
+      hasSelection: false,
+      styleSummary: "Select one component, frame, or layer to audit."
+    };
+  }
+
   const selected = figma.currentPage.selection[0];
   if (!selected) {
     return {
@@ -89,17 +112,24 @@ function describeSelection(): SelectedFigmaComponent {
       type: "None",
       width: 0,
       height: 0,
+      childCount: 0,
+      textSample: "",
+      hasRtlText: false,
       hasSelection: false,
       styleSummary: "Select the design component you want to compare."
     };
   }
 
+  const textSample = collectTextSample(selected);
   return {
     nodeId: selected.id,
     name: selected.name || selected.type,
     type: readableNodeType(selected.type),
     width: "width" in selected && typeof selected.width === "number" ? Math.round(selected.width) : 0,
     height: "height" in selected && typeof selected.height === "number" ? Math.round(selected.height) : 0,
+    childCount: countDescendants(selected),
+    textSample,
+    hasRtlText: hasRtlText(textSample),
     hasSelection: true,
     styleSummary: summarizeSelectedStyles(selected)
   };
@@ -126,6 +156,39 @@ function hasVisibleEffect(value: unknown): boolean {
 
 function readableNodeType(type: SceneNode["type"]): string {
   return type.toLowerCase().replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function collectTextSample(node: SceneNode): string {
+  const texts: string[] = [];
+  const queue: SceneNode[] = [node];
+
+  while (queue.length && texts.join(" ").length < 800) {
+    const current = queue.shift();
+    if (!current) continue;
+    if (current.type === "TEXT" && current.characters.trim()) texts.push(current.characters.trim());
+    if ("children" in current) queue.push(...Array.from(current.children));
+  }
+
+  return texts.join(" ").replace(/\s+/g, " ").trim().slice(0, 800);
+}
+
+function countDescendants(node: SceneNode): number {
+  if (!("children" in node)) return 0;
+  let count = 0;
+  const queue = Array.from(node.children);
+
+  while (queue.length && count < 2000) {
+    const current = queue.shift();
+    if (!current) continue;
+    count += 1;
+    if ("children" in current) queue.push(...Array.from(current.children));
+  }
+
+  return count;
+}
+
+function hasRtlText(text: string): boolean {
+  return /[\u0600-\u06FF]/.test(text);
 }
 
 function post(message: ControllerToUiMessage): void {

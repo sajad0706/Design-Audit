@@ -6,7 +6,8 @@
   "description": "Figma plugin that audits designs against production tokens and design-lint rules.",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "test:qa": "node scripts/qa-smoke.mjs"
   },
   "dependencies": {
     "fflate": "^0.8.2",

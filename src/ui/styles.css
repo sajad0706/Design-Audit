@@ -342,6 +342,8 @@ textarea {
 .candidate-list {
   display: grid;
   gap: 6px;
+  max-height: 214px;
+  overflow: auto;
 }
 
 .candidate-button {
@@ -364,6 +366,11 @@ textarea {
   box-shadow: inset 0 0 0 1px var(--brand);
 }
 
+.candidate-button.previewing {
+  border-color: color-mix(in srgb, var(--brand), transparent 45%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand), transparent 45%);
+}
+
 .candidate-button strong {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -375,9 +382,44 @@ textarea {
   font-weight: 800;
 }
 
-.preview-shell {
-  height: 172px;
+.candidate-button small {
+  grid-column: 1 / -1;
   overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.candidate-signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.candidate-signals span {
+  max-width: 100%;
+  padding: 4px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.signal-good {
+  background: color-mix(in srgb, var(--success), transparent 92%);
+  color: var(--success);
+}
+
+.signal-warning {
+  background: color-mix(in srgb, var(--warning), transparent 92%);
+  color: var(--warning);
+}
+
+.preview-shell {
+  height: 240px;
+  overflow: auto;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--raised);

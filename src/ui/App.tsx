@@ -12,6 +12,13 @@ import { ResultsPanel } from "./components/ResultsPanel";
 import { SelectedComponentPanel } from "./components/SelectedComponentPanel";
 import { SourceInput } from "./components/SourceInput";
 import { Tooltip } from "./components/Tooltip";
+import {
+  AUTO_SELECT_CONFIDENCE,
+  AMBIGUOUS_SCORE_GAP,
+  componentDisplayScore,
+  hasHardMatchWarning,
+  rankReferenceForSelection
+} from "./componentMatcher";
 import { readGithubRepository, readProductionFiles, readRepositoryUpload } from "./sourceReaders";
 
 export function App() {
@@ -48,7 +55,10 @@ export function App() {
         setStatus("Annotations cleared.");
       }
       if (message.type === "selection-info") {
-        setSelectedFigmaComponent(message.component);
+        setSelectedFigmaComponent((previous) => {
+          if (previous?.nodeId !== message.component.nodeId) setReport(null);
+          return message.component;
+        });
       }
       if (message.type === "error") {
         setBusy(false);
@@ -66,12 +76,25 @@ export function App() {
       setLoadingSource(true);
       setReport(null);
       setStatus("Detecting the production component...");
-      const nextReference = await readReference();
+      const nextReference = rankReferenceForSelection(await readReference(), selectedFigmaComponent);
       const first = nextReference.components[0];
+      const second = nextReference.components[1];
+      const firstScore = componentDisplayScore(first);
+      const secondScore = componentDisplayScore(second);
+      const uncertain = Boolean(first && second && firstScore - secondScore < AMBIGUOUS_SCORE_GAP && secondScore >= 55);
+      const hardWarning = hasHardMatchWarning(first);
       setReference(nextReference);
-      setSelectedComponentId(first?.id || "");
+      setSelectedComponentId(first && firstScore >= AUTO_SELECT_CONFIDENCE && !uncertain && !hardWarning ? first.id : "");
       setStatus(first
-        ? `${first.name} detected. Review the preview, then scan for mismatches.`
+        ? !nextReference.tokens.length
+          ? "Component detected, but no production styles or tokens were found."
+          : uncertain
+          ? "We found multiple possible production components. Please select the one that matches your Figma design."
+          : hardWarning
+          ? "We detected a possible layout wrapper. Please choose the component that visually matches your Figma design."
+          : firstScore >= AUTO_SELECT_CONFIDENCE
+          ? `${first.name} detected. Review the preview, then scan for mismatches.`
+          : "We found a possible component. Please review and select it before scanning."
         : "We couldn’t confidently detect the production component.");
     } catch (error) {
       setReference(null);
@@ -115,6 +138,7 @@ export function App() {
 
   function selectedProductionReference(): ProductionReference | null {
     if (!reference) return null;
+    if (!reference.tokens.length) return null;
     const selected = reference.components.find((component) => component.id === selectedComponentId);
     if (!selected) return null;
     const tokenIds = new Set(selected.tokenIds);
@@ -150,7 +174,7 @@ export function App() {
   }
 
   const selectedProduction = reference?.components.find((component) => component.id === selectedComponentId) || null;
-  const canScanProduction = Boolean(selectedFigmaComponent?.hasSelection && selectedProduction);
+  const canScanProduction = Boolean(selectedFigmaComponent?.hasSelection && selectedProduction && reference?.tokens.length);
   const scanDisabled = busy || loadingSource || !canScanProduction;
 
   return (
@@ -224,7 +248,9 @@ export function App() {
         </div>
 
         <p className="muted">
-          {selectedProduction
+          {selectedProduction && !reference?.tokens.length
+            ? "The detected component has no production styles or tokens to compare."
+            : selectedProduction
             ? `Scanning will compare against ${selectedProduction.name}.`
             : "Load and confirm a production component before scanning."}
         </p>
