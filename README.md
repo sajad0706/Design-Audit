@@ -63,7 +63,7 @@ npm run build
 
 1. Open Figma desktop.
 2. Go to `Plugins > Development > Import plugin from manifest...`.
-3. Select `figma-production-compare/manifest.json`.
-4. Run `Production Code Audit`.
+3. Select `figma-production-compareV1/manifest.json`.
+4. Run `Design Audit`.
 
 The manifest includes a placeholder plugin ID. Replace it with the ID assigned by Figma before publishing.
