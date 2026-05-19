@@ -1,0 +1,13 @@
+{
+  "name": "Design Audit",
+  "id": "1500000000000000000",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": ["*"],
+    "reasoning": "Fetches public GitHub repository archives and user-provided production files so designers can compare Figma layers with production tokens."
+  }
+}

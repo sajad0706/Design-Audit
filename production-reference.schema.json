@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/production-code-audit-reference.schema.json",
+  "title": "Production Code Audit Reference",
+  "type": "object",
+  "required": ["label", "inputKind", "tokens", "sourceSummary"],
+  "properties": {
+    "label": { "type": "string" },
+    "inputKind": {
+      "enum": ["github", "repo-upload", "production-file"]
+    },
+    "tokens": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/token" }
+    },
+    "sourceSummary": {
+      "type": "object",
+      "required": ["fileCount", "totalBytes", "colors", "typography", "spacing", "radius", "effects"],
+      "properties": {
+        "fileCount": { "type": "number" },
+        "totalBytes": { "type": "number" },
+        "colors": { "type": "number" },
+        "typography": { "type": "number" },
+        "spacing": { "type": "number" },
+        "radius": { "type": "number" },
+        "effects": { "type": "number" }
+      }
+    }
+  },
+  "$defs": {
+    "token": {
+      "type": "object",
+      "required": ["id", "name", "displayName", "category", "value", "rawValue"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "displayName": { "type": "string" },
+        "category": {
+          "enum": ["color", "typography", "spacing", "radius", "effect"]
+        },
+        "value": {
+          "type": ["string", "number"]
+        },
+        "rawValue": { "type": "string" },
+        "sourceFile": { "type": "string" },
+        "cssProperty": { "type": "string" }
+      }
+    }
+  }
+}
